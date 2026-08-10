@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gudang — Barang Masuk &amp; Keluar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ================= LOGIN SCREEN ================= -->
+<div class="login-screen" id="loginScreen">
+  <div class="login-card">
+    <div class="login-brand">
+      <div class="brand-mark">G</div>
+      <div class="brand-text">
+        <h1 style="font-family:'Barlow Condensed',sans-serif;font-weight:700;font-size:22px;text-transform:uppercase;margin:0;">Gudang Pintar</h1>
+        <span style="font-size:12px;color:var(--ink-soft);">Masuk untuk melihat gudang Anda</span>
+      </div>
+    </div>
+
+    <div class="login-tabs">
+      <button id="tabLoginIn" class="active">Masuk</button>
+      <button id="tabLoginUp">Daftar akun</button>
+    </div>
+
+    <div class="field">
+      <label>Nama pengguna</label>
+      <input type="text" id="loginUsername" placeholder="cth. budi">
+    </div>
+    <div class="field" style="margin-bottom:6px;">
+      <label>Kata sandi</label>
+      <input type="password" id="loginPassword" placeholder="Kata sandi">
+    </div>
+    <div class="login-error" id="loginError"></div>
+
+    <button class="btn btn-primary btn-block" id="btnLoginSubmit" style="margin-top:12px;">Masuk</button>
+
+    <p class="login-note">Setiap nama pengguna punya data gudang sendiri, terpisah dari pengguna lain. Ini pemisah data sederhana untuk dipakai bersama tim, bukan sistem keamanan tingkat tinggi — jangan gunakan kata sandi yang juga dipakai di tempat lain.</p>
+  </div>
+</div>
+
+<div class="app" id="appRoot">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">G</div>
+      <div class="brand-text">
+        <h1>Gudang Pintar</h1>
+        <span>Barang masuk &amp; keluar</span>
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="date-chip" id="todayChip"></div>
+      <div class="user-chip"><span class="user-avatar" id="userAvatar"></span><b id="currentUserLabel"></b></div>
+      <button class="btn btn-ghost btn-sm" id="btnLogout">Keluar</button>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button data-tab="dashboard" class="active">Dasbor</button>
+    <button data-tab="barang">Data Barang</button>
+    <button data-tab="transaksi">Catat Transaksi</button>
+    <button data-tab="riwayat">Riwayat</button>
+  </nav>
+
+  <!-- ================= DASHBOARD ================= -->
+  <section class="view active" id="view-dashboard">
+    <div class="stat-grid" id="statGrid"></div>
+
+    <div class="panel">
+      <div class="panel-row"><h2>Stok menipis</h2></div>
+      <div id="lowStockList"></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-row">
+        <h2>Transaksi terbaru</h2>
+        <button class="btn btn-ghost btn-sm" data-tab-link="riwayat">Lihat semua →</button>
+      </div>
+      <div id="recentTrxList"></div>
+    </div>
+  </section>
+
+  <!-- ================= BARANG ================= -->
+  <section class="view" id="view-barang">
+    <div class="panel">
+      <div class="panel-row">
+        <h2>Data barang</h2>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+          <div class="search-wrap">
+            <span class="search-icon">⌕</span>
+            <input type="text" id="searchBarang" placeholder="Cari nama atau kode barang…">
+          </div>
+          <button class="btn" id="btnImportExcel">⇧ Impor Excel</button>
+          <button class="btn btn-primary" id="btnAddBarang">+ Tambah barang</button>
+        </div>
+      </div>
+      <div id="barangTableWrap"></div>
+    </div>
+  </section>
+
+  <!-- ================= TRANSAKSI ================= -->
+  <section class="view" id="view-transaksi">
+    <div class="panel">
+      <div class="panel-row">
+        <h2>Catat transaksi</h2>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-in" id="btnGoMasuk">↓ Barang masuk</button>
+          <button class="btn btn-out" id="btnGoKeluar">↑ Barang keluar</button>
+        </div>
+      </div>
+      <p class="hint">Pilih tombol di atas untuk mencatat barang yang masuk (dari supplier) atau keluar (ke pelanggan/proyek). Stok akan diperbarui secara otomatis.</p>
+    </div>
+
+    <div class="panel">
+      <div class="panel-row"><h2>Transaksi hari ini</h2></div>
+      <div id="todayTrxList"></div>
+    </div>
+  </section>
+
+  <!-- ================= RIWAYAT ================= -->
+  <section class="view" id="view-riwayat">
+    <div class="panel">
+      <div class="panel-row"><h2>Riwayat transaksi</h2></div>
+      <div class="filter-bar">
+        <div class="search-wrap">
+          <span class="search-icon">⌕</span>
+          <input type="text" id="searchRiwayat" placeholder="Cari nama barang…">
+        </div>
+        <select id="filterTipe">
+          <option value="">Semua tipe</option>
+          <option value="masuk">Masuk</option>
+          <option value="keluar">Keluar</option>
+        </select>
+        <input type="date" id="filterTanggal" style="width:auto;">
+        <button class="btn btn-ghost btn-sm" id="btnClearFilter">Reset filter</button>
+        <span style="flex:1;"></span>
+        <button class="btn btn-sm" id="btnExportExcel">⇩ Unduh Excel</button>
+        <button class="btn btn-sm" id="btnExportPdf">⇩ Unduh PDF</button>
+      </div>
+      <div id="riwayatTableWrap"></div>
+    </div>
+  </section>
+
+</div>
+
+<!-- ============ MODAL: Tambah/Edit Barang ============ -->
+<div class="modal-overlay" id="modalBarang">
+  <div class="modal">
+    <h3 id="modalBarangTitle">Tambah barang</h3>
+    <input type="hidden" id="barangId">
+    <div class="field-row">
+      <div class="field">
+        <label>Kode barang</label>
+        <input type="text" id="fKode" placeholder="BRG-001">
+      </div>
+      <div class="field">
+        <label>Kategori</label>
+        <input type="text" id="fKategori" placeholder="Elektronik">
+      </div>
+    </div>
+    <div class="field">
+      <label>Nama barang</label>
+      <input type="text" id="fNama" placeholder="Kabel HDMI 2m">
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Satuan</label>
+        <input type="text" id="fSatuan" placeholder="pcs / dus / kg">
+      </div>
+      <div class="field">
+        <label>Stok minimum</label>
+        <input type="number" id="fStokMin" min="0" value="0">
+      </div>
+    </div>
+    <div class="field">
+      <label id="lblStokAwal">Stok awal</label>
+      <input type="number" id="fStokAwal" min="0" value="0">
+      <div class="helper" id="stokAwalHelper">Jumlah stok saat barang pertama kali didata.</div>
+    </div>
+    <div class="err-text" id="errBarang"></div>
+    <div class="modal-actions">
+      <button class="btn" id="btnCancelBarang">Batal</button>
+      <button class="btn btn-primary" id="btnSaveBarang">Simpan barang</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: Transaksi ============ -->
+<div class="modal-overlay" id="modalTrx">
+  <div class="modal">
+    <h3 id="modalTrxTitle">Barang masuk</h3>
+    <input type="hidden" id="trxTipe">
+    <div class="field">
+      <label>Barang</label>
+      <select id="fTrxItem"></select>
+    </div>
+    <div class="field-row">
+      <div class="field">
+        <label>Jumlah</label>
+        <input type="number" id="fTrxQty" min="1" value="1">
+      </div>
+      <div class="field">
+        <label>Tanggal</label>
+        <input type="date" id="fTrxTanggal">
+      </div>
+    </div>
+    <div class="field">
+      <label id="lblPihak">Dari supplier</label>
+      <input type="text" id="fTrxPihak" placeholder="Nama supplier / tujuan">
+    </div>
+    <div class="field">
+      <label>Keterangan (opsional)</label>
+      <textarea id="fTrxKet" rows="2" placeholder="Catatan tambahan…"></textarea>
+    </div>
+    <div class="err-text" id="errTrx"></div>
+    <div class="modal-actions">
+      <button class="btn" id="btnCancelTrx">Batal</button>
+      <button class="btn btn-primary" id="btnSaveTrx">Simpan transaksi</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: Konfirmasi hapus ============ -->
+<div class="modal-overlay" id="modalConfirm">
+  <div class="modal" style="max-width:360px;">
+    <h3>Hapus barang?</h3>
+    <p style="font-size:13.5px;color:var(--ink-soft);" id="confirmText">Tindakan ini tidak dapat dibatalkan.</p>
+    <div class="modal-actions">
+      <button class="btn" id="btnCancelConfirm">Batal</button>
+      <button class="btn" style="background:var(--danger);border-color:var(--danger);color:#fff;" id="btnDoConfirm">Ya, hapus</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ MODAL: Impor Excel ============ -->
+<div class="modal-overlay" id="modalImport">
+  <div class="modal wide">
+    <h3>Impor barang dari Excel</h3>
+    <p class="hint" style="margin-bottom:14px;">File harus punya kolom: <b>kode</b>, <b>nama</b>, kategori, satuan, stok, stok_min (kategori/satuan/stok/stok_min opsional).</p>
+
+    <div id="importStep1">
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <button class="btn btn-primary" id="btnChooseFile">Pilih file Excel / CSV</button>
+        <button class="btn btn-ghost" id="btnDownloadTemplate">Unduh template</button>
+      </div>
+      <input type="file" id="fileInputExcel" accept=".xlsx,.xls,.csv">
+      <div class="err-text" id="errImport"></div>
+    </div>
+
+    <div id="importStep2" style="display:none;">
+      <div class="import-summary" id="importSummary"></div>
+      <div class="import-table-wrap">
+        <table>
+          <thead><tr><th style="width:26px;"></th><th>Kode</th><th>Nama</th><th>Kategori</th><th>Satuan</th><th>Stok</th><th>Min.</th><th>Status</th></tr></thead>
+          <tbody id="importPreviewBody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn" id="btnCancelImport">Batal</button>
+      <button class="btn btn-primary" id="btnConfirmImport" style="display:none;">Impor barang terpilih</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="script.js"></script>
+</body>
+</html>
